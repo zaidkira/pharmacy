@@ -103,7 +103,7 @@ export function PharmaciesPage() {
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
               {filteredPharmacies.map((pharmacy) => (
-                pharmacy.location?.coordinates && (
+                pharmacy.location && pharmacy.location.coordinates && pharmacy.location.coordinates[0] !== undefined && pharmacy.location.coordinates[1] !== undefined && (
                   <Marker 
                     key={pharmacy._id} 
                     position={[pharmacy.location.coordinates[1], pharmacy.location.coordinates[0]]}
