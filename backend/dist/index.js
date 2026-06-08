@@ -36,7 +36,7 @@ app.use(express_1.default.json());
 // Serve uploaded files statically
 app.use("/uploads", express_1.default.static(path_1.default.join(__dirname, "../../uploads")));
 // Serve static files from the built client app
-app.use(express_1.default.static(path_1.default.join(__dirname, "../../../dist")));
+app.use(express_1.default.static(path_1.default.join(__dirname, "../../dist")));
 // Routes
 app.use("/api/auth", authRoutes_1.default);
 app.use("/api/pharmacies", pharmacyRoutes_1.default);
@@ -46,8 +46,8 @@ app.use("/api/upload", uploadRoutes_1.default);
 app.use("/api/prescriptions", prescriptionRoutes_1.default);
 app.use("/api/appointments", appointmentRoutes_1.default);
 // Fallback all other GET requests to client app routes
-app.get("*", (req, res) => {
-    res.sendFile(path_1.default.join(__dirname, "../../../dist/index.html"));
+app.get("*splat", (req, res) => {
+    res.sendFile(path_1.default.join(__dirname, "../../dist/index.html"));
 });
 const PORT = process.env.PORT || 5000;
 httpServer.listen(PORT, () => __awaiter(void 0, void 0, void 0, function* () {

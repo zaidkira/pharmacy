@@ -40,6 +40,8 @@ export function DoctorDashboard() {
   const [medications, setMedications] = useState([{ name: "", dosage: "", frequency: "", duration: "" }]);
   const [diagnosis, setDiagnosis] = useState("");
   const [notes, setNotes] = useState("");
+  const [fileUrl, setFileUrl] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
   const [stats, setStats] = useState({
     patientsToday: 0,
     completedConsultations: 0,
@@ -80,6 +82,44 @@ export function DoctorDashboard() {
     setMedications(updated);
   };
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const file = files[0];
+    const formData = new FormData();
+    formData.append("prescription", file);
+
+    setIsUploading(true);
+    try {
+      // Use raw fetch for FormData to set Content-Type correctly
+      const token = localStorage.getItem("token");
+      const headers: any = {};
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
+      // Fetch base URL dynamically in production
+      const baseApi = window.location.hostname.includes("localhost") || window.location.hostname.includes("127.0.0.1")
+        ? "http://localhost:5000/api"
+        : `${window.location.origin}/api`;
+
+      const res = await fetch(`${baseApi}/upload`, {
+        method: "POST",
+        headers,
+        body: formData
+      });
+      if (!res.ok) throw new Error("Upload failed");
+      const data = await res.json();
+      setFileUrl(data.url);
+      toast.success("File uploaded successfully");
+    } catch (err: any) {
+      toast.error(err.message || "File upload failed");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   const handleSendPrescription = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedAppointment) return;
@@ -92,7 +132,8 @@ export function DoctorDashboard() {
           medications,
           diagnosis,
           notes,
-          appointmentId: selectedAppointment._id
+          appointmentId: selectedAppointment._id,
+          fileUrl
         }),
       });
       toast.success("Prescription sent successfully");
@@ -100,6 +141,7 @@ export function DoctorDashboard() {
       setMedications([{ name: "", dosage: "", frequency: "", duration: "" }]);
       setDiagnosis("");
       setNotes("");
+      setFileUrl("");
       fetchAppointments();
     } catch (error: any) {
       toast.error(error.message || "Failed to send prescription");
@@ -334,6 +376,24 @@ export function DoctorDashboard() {
                                           value={notes}
                                           onChange={(e) => setNotes(e.target.value)}
                                         />
+                                      </div>
+
+                                      <div className="space-y-2">
+                                        <Label className="text-lg font-bold text-gray-700">Attach Lab Scan / Medical File</Label>
+                                        <div className="flex items-center gap-4">
+                                          <Input 
+                                            type="file" 
+                                            accept=".pdf,.jpg,.jpeg,.png" 
+                                            onChange={handleFileUpload} 
+                                            className="rounded-xl border-[#B7D1CC] file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-teal-50 file:text-[#0F766E] hover:file:bg-teal-100 cursor-pointer"
+                                          />
+                                          {isUploading && <span className="text-xs text-teal-600 animate-pulse font-semibold">Uploading...</span>}
+                                        </div>
+                                        {fileUrl && (
+                                          <p className="text-xs text-emerald-600 font-semibold mt-1">
+                                            ✓ File attached successfully: <a href={fileUrl.startsWith("http") ? fileUrl : `${window.location.hostname.includes("localhost") || window.location.hostname.includes("127.0.0.1") ? "http://localhost:5000" : window.location.origin}${fileUrl}`} target="_blank" rel="noopener noreferrer" className="underline font-bold text-[#0F766E] hover:text-[#0d6560]">View File</a>
+                                          </p>
+                                        )}
                                       </div>
 
                                       <DialogFooter>

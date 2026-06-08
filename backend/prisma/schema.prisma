@@ -104,8 +104,8 @@ model Appointment {
 
 model Prescription {
   id          String             @id @default(uuid())
-  doctorId    String
-  doctor      User               @relation("DoctorPrescriptions", fields: [doctorId], references: [id], onDelete: Cascade)
+  doctorId    String?
+  doctor      User?              @relation("DoctorPrescriptions", fields: [doctorId], references: [id], onDelete: Cascade)
   patientId   String
   patient     User               @relation("PatientPrescriptions", fields: [patientId], references: [id], onDelete: Cascade)
   pharmacyId  String?
@@ -114,6 +114,7 @@ model Prescription {
   diagnosis   String?
   notes       String?
   status      String             @default("ACTIVE") // ACTIVE, SENT_TO_PHARMACY, COMPLETED, EXPIRED
+  fileUrl     String?
   date        DateTime           @default(now())
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt

@@ -11,7 +11,8 @@ import {
   Clock,
   ExternalLink,
   ChevronRight,
-  Info
+  Info,
+  Upload
 } from "lucide-react";
 import { Badge } from "../components/ui/badge";
 import { apiClient } from "../api/client";
@@ -23,6 +24,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "../components/ui/dialog";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
 
 export function PatientPrescriptions() {
   const [prescriptions, setPrescriptions] = useState<any[]>([]);
@@ -68,6 +71,82 @@ export function PatientPrescriptions() {
     }
   };
 
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [customFileUrl, setCustomFileUrl] = useState("");
+  const [customFileUploading, setCustomFileUploading] = useState(false);
+  const [customDiagnosis, setCustomDiagnosis] = useState("");
+  const [customNotes, setCustomNotes] = useState("");
+  const [selectedPharmacyId, setSelectedPharmacyId] = useState("");
+
+  const handleCustomFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const file = files[0];
+    const formData = new FormData();
+    formData.append("prescription", file);
+
+    setCustomFileUploading(true);
+    try {
+      const token = localStorage.getItem("token");
+      const headers: any = {};
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
+      const baseApi = window.location.hostname.includes("localhost") || window.location.hostname.includes("127.0.0.1")
+        ? "http://localhost:5000/api"
+        : `${window.location.origin}/api`;
+
+      const res = await fetch(`${baseApi}/upload`, {
+        method: "POST",
+        headers,
+        body: formData
+      });
+      if (!res.ok) throw new Error("Upload failed");
+      const data = await res.json();
+      setCustomFileUrl(data.url);
+      toast.success("Document uploaded successfully");
+    } catch (err: any) {
+      toast.error(err.message || "File upload failed");
+    } finally {
+      setCustomFileUploading(false);
+    }
+  };
+
+  const handleCustomSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!customFileUrl) {
+      toast.error("Please upload a scan/file first");
+      return;
+    }
+    if (!selectedPharmacyId) {
+      toast.error("Please select a pharmacy");
+      return;
+    }
+
+    try {
+      await apiClient("/prescriptions/patient/upload-scan", {
+        method: "POST",
+        body: JSON.stringify({
+          pharmacyId: selectedPharmacyId,
+          fileUrl: customFileUrl,
+          diagnosis: customDiagnosis,
+          notes: customNotes
+        }),
+      });
+      toast.success("Scan shared with pharmacy successfully!");
+      setIsUploadModalOpen(false);
+      setCustomFileUrl("");
+      setCustomDiagnosis("");
+      setCustomNotes("");
+      setSelectedPharmacyId("");
+      fetchData();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to share document");
+    }
+  };
+
   return (
     <div className="max-w-5xl mx-auto space-y-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -75,6 +154,76 @@ export function PatientPrescriptions() {
           <h1 className="text-4xl font-bold mb-2 text-[#0F766E]">My Prescriptions</h1>
           <p className="text-xl text-gray-600">Digital prescriptions from your doctors</p>
         </div>
+        <Dialog open={isUploadModalOpen} onOpenChange={setIsUploadModalOpen}>
+          <DialogTrigger asChild>
+            <Button className="bg-[#0F766E] hover:bg-[#0d6560] text-white h-12 rounded-2xl px-6 shadow-lg">
+              <Upload className="w-5 h-5 mr-2" />
+              Upload Scan to Pharmacy
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[500px] rounded-[2rem]">
+            <DialogHeader>
+              <DialogTitle className="text-2xl text-[#0F766E] flex items-center gap-2">
+                <Upload className="w-6 h-6" />
+                Send Scan to Pharmacy
+              </DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleCustomSubmit} className="space-y-5 py-4">
+              <div className="space-y-2">
+                <Label className="font-semibold text-gray-700">Select Pharmacy</Label>
+                <select
+                  className="w-full h-12 rounded-xl border-2 border-gray-200 px-4 focus:border-[#0F766E] outline-none"
+                  value={selectedPharmacyId}
+                  onChange={(e) => setSelectedPharmacyId(e.target.value)}
+                  required
+                >
+                  <option value="">-- Choose a pharmacy --</option>
+                  {pharmacies.map((p: any) => (
+                    <option key={p._id} value={p._id}>{p.name} — {p.address}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label className="font-semibold text-gray-700">Upload File (PDF, JPG, PNG)</Label>
+                <Input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  onChange={handleCustomFileUpload}
+                  className="rounded-xl file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-teal-50 file:text-[#0F766E] hover:file:bg-teal-100 cursor-pointer"
+                  required
+                />
+                {customFileUploading && <span className="text-xs text-teal-600 animate-pulse font-semibold">Uploading...</span>}
+                {customFileUrl && <p className="text-xs text-emerald-600 font-semibold">✓ File uploaded</p>}
+              </div>
+              <div className="space-y-2">
+                <Label className="font-semibold text-gray-700">Description (optional)</Label>
+                <Input
+                  placeholder="e.g. Dental X-ray, Blood Test Results"
+                  value={customDiagnosis}
+                  onChange={(e) => setCustomDiagnosis(e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="font-semibold text-gray-700">Notes for Pharmacist (optional)</Label>
+                <textarea
+                  className="w-full min-h-[80px] p-4 rounded-2xl border-2 border-gray-100 focus:border-[#0F766E] outline-none transition-all resize-none"
+                  placeholder="Any special instructions..."
+                  value={customNotes}
+                  onChange={(e) => setCustomNotes(e.target.value)}
+                />
+              </div>
+              <Button
+                type="submit"
+                disabled={!customFileUrl || !selectedPharmacyId}
+                className="w-full bg-[#0F766E] hover:bg-[#0d6560] h-14 rounded-2xl text-lg shadow-lg disabled:opacity-50"
+              >
+                <Send className="w-5 h-5 mr-2" />
+                Send to Pharmacy
+              </Button>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {isLoading ? (
@@ -132,6 +281,22 @@ export function PatientPrescriptions() {
                            ))}
                         </div>
                      </div>
+
+                     {presc.fileUrl && (
+                        <div className="p-3 bg-teal-50 border border-teal-100 rounded-xl flex items-center justify-between">
+                           <span className="text-xs text-teal-700 font-semibold flex items-center gap-1">
+                              📎 Attached Lab Scan / Medical File
+                           </span>
+                           <a 
+                              href={presc.fileUrl.startsWith("http") ? presc.fileUrl : `${window.location.hostname.includes("localhost") || window.location.hostname.includes("127.0.0.1") ? "http://localhost:5000" : window.location.origin}${presc.fileUrl}`} 
+                              target="_blank" 
+                              rel="noopener noreferrer" 
+                              className="text-xs font-bold text-[#0F766E] hover:underline flex items-center gap-1"
+                           >
+                              <ExternalLink className="w-3.5 h-3.5" /> View File
+                           </a>
+                        </div>
+                     )}
 
                      <div className="flex items-center gap-6 pt-4 border-t border-gray-100">
                         <div className="flex items-center gap-2 text-gray-500 text-sm">

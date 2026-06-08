@@ -17,6 +17,8 @@ export function SignupPage() {
     password: "",
     confirmPassword: "",
     role: "CUSTOMER",
+    specialization: "",
+    licenseNumber: "",
   });
   const [isLoading, setIsLoading] = useState(false);
 
@@ -36,7 +38,9 @@ export function SignupPage() {
           name: formData.name,
           email: formData.email,
           password: formData.password,
-          role: formData.role
+          role: formData.role,
+          specialization: formData.role === "DOCTOR" ? formData.specialization : undefined,
+          licenseNumber: formData.role === "DOCTOR" ? formData.licenseNumber : undefined,
         }),
       });
 
@@ -52,11 +56,11 @@ export function SignupPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-12" style={{ backgroundColor: '#B7D1CC' }}>
+    <div className="min-h-screen flex items-center justify-center px-4 py-12 animate-fade-in" style={{ backgroundColor: '#B7D1CC' }}>
       <Card className="w-full max-w-md p-8 rounded-2xl shadow-2xl">
         <div className="flex flex-col items-center mb-8">
           <img src="/logo.jpg" alt="PharmaSmart" className="w-24 h-24 object-contain mb-2 rounded-2xl shadow-sm" />
-          <h1 className="text-3xl" style={{ color: '#0F766E' }}>
+          <h1 className="text-3xl font-bold" style={{ color: '#0F766E' }}>
             Create Account
           </h1>
           <p className="text-gray-600 mt-2 text-center">
@@ -64,7 +68,7 @@ export function SignupPage() {
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="name" className="text-gray-700">Full Name</Label>
             <Input
@@ -91,6 +95,71 @@ export function SignupPage() {
             />
           </div>
 
+          <div className="flex bg-gray-100 p-1 rounded-xl gap-1">
+            <button
+              type="button"
+              onClick={() => setFormData({ ...formData, role: "CUSTOMER" })}
+              className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
+                formData.role === "CUSTOMER" 
+                ? "bg-[#0F766E] text-white shadow-md" 
+                : "text-gray-500 hover:text-[#0F766E]"
+              }`}
+            >
+              Patient
+            </button>
+            <button
+              type="button"
+              onClick={() => setFormData({ ...formData, role: "DOCTOR" })}
+              className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
+                formData.role === "DOCTOR" 
+                ? "bg-[#0F766E] text-white shadow-md" 
+                : "text-gray-500 hover:text-[#0F766E]"
+              }`}
+            >
+              Doctor
+            </button>
+            <button
+              type="button"
+              onClick={() => setFormData({ ...formData, role: "PHARMACY_OWNER" })}
+              className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
+                formData.role === "PHARMACY_OWNER" 
+                ? "bg-[#0F766E] text-white shadow-md" 
+                : "text-gray-500 hover:text-[#0F766E]"
+              }`}
+            >
+              Pharmacy
+            </button>
+          </div>
+
+          {formData.role === "DOCTOR" && (
+            <div className="space-y-4 border-l-4 border-[#0F766E] pl-3 py-1 bg-[#f0f7f6] rounded-r-lg">
+              <div className="space-y-2">
+                <Label htmlFor="specialization" className="text-gray-700 font-semibold">Specialization</Label>
+                <Input
+                  id="specialization"
+                  type="text"
+                  value={formData.specialization}
+                  onChange={(e) => setFormData({ ...formData, specialization: e.target.value })}
+                  placeholder="e.g. Cardiology, General Medicine"
+                  className="h-10 text-base border focus:border-[#0F766E] rounded-lg"
+                  required={formData.role === "DOCTOR"}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="licenseNumber" className="text-gray-700 font-semibold">License Number</Label>
+                <Input
+                  id="licenseNumber"
+                  type="text"
+                  value={formData.licenseNumber}
+                  onChange={(e) => setFormData({ ...formData, licenseNumber: e.target.value })}
+                  placeholder="e.g. LIC-12345"
+                  className="h-10 text-base border focus:border-[#0F766E] rounded-lg"
+                  required={formData.role === "DOCTOR"}
+                />
+              </div>
+            </div>
+          )}
+
           <div className="space-y-2">
             <Label htmlFor="password" className="text-gray-700">Password</Label>
             <Input
@@ -102,31 +171,6 @@ export function SignupPage() {
               className="h-12 text-lg border-2 focus:border-[#0F766E] rounded-lg"
               required
             />
-          </div>
-
-          <div className="flex bg-gray-100 p-1 rounded-xl mb-4 gap-1">
-            <button
-              type="button"
-              onClick={() => setFormData({ ...formData, role: "CUSTOMER" })}
-              className={`flex-1 py-3 rounded-lg text-sm font-bold transition-all ${
-                formData.role === "CUSTOMER" 
-                ? "bg-[#0F766E] text-white shadow-md" 
-                : "text-gray-500 hover:text-[#0F766E]"
-              }`}
-            >
-              Patient/Customer
-            </button>
-            <button
-              type="button"
-              onClick={() => setFormData({ ...formData, role: "PHARMACY_OWNER" })}
-              className={`flex-1 py-3 rounded-lg text-sm font-bold transition-all ${
-                formData.role === "PHARMACY_OWNER" 
-                ? "bg-[#0F766E] text-white shadow-md" 
-                : "text-gray-500 hover:text-[#0F766E]"
-              }`}
-            >
-              Pharmacy Owner
-            </button>
           </div>
 
           <div className="space-y-2">

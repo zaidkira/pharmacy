@@ -9,11 +9,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getPatientSentPrescriptions = exports.updatePharmacyPrescriptionStatus = exports.getPharmacyPrescriptions = exports.sendPrescriptionToPharmacy = exports.getPatientPrescriptions = exports.getDoctorPrescriptions = exports.createPrescription = void 0;
+exports.uploadPatientScan = exports.getPatientSentPrescriptions = exports.updatePharmacyPrescriptionStatus = exports.getPharmacyPrescriptions = exports.sendPrescriptionToPharmacy = exports.getPatientPrescriptions = exports.getDoctorPrescriptions = exports.createPrescription = void 0;
 const db_1 = require("../config/db");
 const createPrescription = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { patientId, medications, diagnosis, notes, appointmentId } = req.body;
+        const { patientId, medications, diagnosis, notes, appointmentId, fileUrl } = req.body;
         const doctorId = req.user.id;
         const prescription = yield db_1.prisma.prescription.create({
             data: {
@@ -21,7 +21,8 @@ const createPrescription = (req, res) => __awaiter(void 0, void 0, void 0, funct
                 patientId,
                 medications: medications || [],
                 diagnosis,
-                notes
+                notes,
+                fileUrl
             }
         });
         if (appointmentId) {
@@ -70,7 +71,7 @@ const getPatientPrescriptions = (req, res) => __awaiter(void 0, void 0, void 0, 
                 pharmacy: { select: { id: true, name: true, address: true } }
             }
         });
-        const mapped = prescriptions.map(p => (Object.assign(Object.assign({}, p), { _id: p.id, doctorId: Object.assign(Object.assign({}, p.doctor), { _id: p.doctor.id }), pharmacyId: p.pharmacy ? Object.assign(Object.assign({}, p.pharmacy), { _id: p.pharmacy.id }) : null })));
+        const mapped = prescriptions.map(p => (Object.assign(Object.assign({}, p), { _id: p.id, doctorId: p.doctor ? Object.assign(Object.assign({}, p.doctor), { _id: p.doctor.id }) : null, pharmacyId: p.pharmacy ? Object.assign(Object.assign({}, p.pharmacy), { _id: p.pharmacy.id }) : null })));
         res.json(mapped);
     }
     catch (error) {
@@ -128,7 +129,7 @@ const getPharmacyPrescriptions = (req, res) => __awaiter(void 0, void 0, void 0,
                 patient: { select: { id: true, name: true, email: true, phone: true } }
             }
         });
-        const mapped = prescriptions.map(p => (Object.assign(Object.assign({}, p), { _id: p.id, prescriptionId: Object.assign(Object.assign({}, p.prescription), { _id: p.prescription.id, doctorId: Object.assign(Object.assign({}, p.prescription.doctor), { _id: p.prescription.doctor.id }) }), patientId: Object.assign(Object.assign({}, p.patient), { _id: p.patient.id }) })));
+        const mapped = prescriptions.map(p => (Object.assign(Object.assign({}, p), { _id: p.id, prescriptionId: Object.assign(Object.assign({}, p.prescription), { _id: p.prescription.id, doctorId: p.prescription.doctor ? Object.assign(Object.assign({}, p.prescription.doctor), { _id: p.prescription.doctor.id }) : null }), patientId: Object.assign(Object.assign({}, p.patient), { _id: p.patient.id }) })));
         res.json(mapped);
     }
     catch (error) {
@@ -183,3 +184,45 @@ const getPatientSentPrescriptions = (req, res) => __awaiter(void 0, void 0, void
     }
 });
 exports.getPatientSentPrescriptions = getPatientSentPrescriptions;
+const uploadPatientScan = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { pharmacyId, fileUrl, diagnosis, notes } = req.body;
+        const patientId = req.user.id;
+        // 1. Create a custom self-uploaded prescription
+        const prescription = yield db_1.prisma.prescription.create({
+            data: {
+                patientId,
+                medications: [],
+                diagnosis: diagnosis || "Self-uploaded medical file",
+                notes: notes || "Patient self-uploaded attachment",
+                fileUrl,
+                status: "SENT_TO_PHARMACY",
+                pharmacyId
+            }
+        });
+        // 2. Share with the pharmacy
+        const pharmacyPresc = yield db_1.prisma.pharmacyPrescription.create({
+            data: {
+                prescriptionId: prescription.id,
+                pharmacyId,
+                patientId,
+                status: "Received",
+                pharmacistNotes: ""
+            }
+        });
+        // 3. Notify pharmacy via Socket.io
+        try {
+            const { getIO } = require("../socket");
+            const io = getIO();
+            io.to(pharmacyId).emit("new_pharmacy_prescription", Object.assign(Object.assign({}, pharmacyPresc), { _id: pharmacyPresc.id }));
+        }
+        catch (err) {
+            console.error("Socket emit failed", err);
+        }
+        res.status(201).json(Object.assign(Object.assign({}, pharmacyPresc), { _id: pharmacyPresc.id }));
+    }
+    catch (error) {
+        res.status(500).json({ message: "Error uploading and sharing scan", error: error.message });
+    }
+});
+exports.uploadPatientScan = uploadPatientScan;

@@ -3,7 +3,7 @@ import { prisma } from "../config/db";
 
 export const createPrescription = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { patientId, medications, diagnosis, notes, appointmentId } = req.body;
+    const { patientId, medications, diagnosis, notes, appointmentId, fileUrl } = req.body;
     const doctorId = (req as any).user.id;
 
     const prescription = await prisma.prescription.create({
@@ -12,7 +12,8 @@ export const createPrescription = async (req: Request, res: Response): Promise<v
         patientId,
         medications: medications || [],
         diagnosis,
-        notes
+        notes,
+        fileUrl
       }
     });
 
@@ -68,7 +69,7 @@ export const getPatientPrescriptions = async (req: Request, res: Response): Prom
     const mapped = prescriptions.map(p => ({
       ...p,
       _id: p.id,
-      doctorId: { ...p.doctor, _id: p.doctor.id },
+      doctorId: p.doctor ? { ...p.doctor, _id: p.doctor.id } : null,
       pharmacyId: p.pharmacy ? { ...p.pharmacy, _id: p.pharmacy.id } : null
     }));
     res.json(mapped);
@@ -137,7 +138,7 @@ export const getPharmacyPrescriptions = async (req: Request, res: Response): Pro
       prescriptionId: {
         ...p.prescription,
         _id: p.prescription.id,
-        doctorId: { ...p.prescription.doctor, _id: p.prescription.doctor.id }
+        doctorId: p.prescription.doctor ? { ...p.prescription.doctor, _id: p.prescription.doctor.id } : null
       },
       patientId: { ...p.patient, _id: p.patient.id }
     }));
@@ -195,5 +196,49 @@ export const getPatientSentPrescriptions = async (req: Request, res: Response): 
     res.json(mapped);
   } catch (error: any) {
     res.status(500).json({ message: "Error getting tracking records", error: error.message });
+  }
+};
+
+export const uploadPatientScan = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { pharmacyId, fileUrl, diagnosis, notes } = req.body;
+    const patientId = (req as any).user.id;
+
+    // 1. Create a custom self-uploaded prescription
+    const prescription = await prisma.prescription.create({
+      data: {
+        patientId,
+        medications: [],
+        diagnosis: diagnosis || "Self-uploaded medical file",
+        notes: notes || "Patient self-uploaded attachment",
+        fileUrl,
+        status: "SENT_TO_PHARMACY",
+        pharmacyId
+      }
+    });
+
+    // 2. Share with the pharmacy
+    const pharmacyPresc = await prisma.pharmacyPrescription.create({
+      data: {
+        prescriptionId: prescription.id,
+        pharmacyId,
+        patientId,
+        status: "Received",
+        pharmacistNotes: ""
+      }
+    });
+
+    // 3. Notify pharmacy via Socket.io
+    try {
+      const { getIO } = require("../socket");
+      const io = getIO();
+      io.to(pharmacyId).emit("new_pharmacy_prescription", { ...pharmacyPresc, _id: pharmacyPresc.id });
+    } catch (err) {
+      console.error("Socket emit failed", err);
+    }
+
+    res.status(201).json({ ...pharmacyPresc, _id: pharmacyPresc.id });
+  } catch (error: any) {
+    res.status(500).json({ message: "Error uploading and sharing scan", error: error.message });
   }
 };
