@@ -242,3 +242,61 @@ export const uploadPatientScan = async (req: Request, res: Response): Promise<vo
     res.status(500).json({ message: "Error uploading and sharing scan", error: error.message });
   }
 };
+
+export const sendPrescriptionByEmail = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { patientEmail, medications, diagnosis, notes, fileUrl } = req.body;
+    const doctorId = (req as any).user.id;
+
+    if (!patientEmail) {
+      res.status(400).json({ message: "Patient email is required" });
+      return;
+    }
+
+    // Look up the patient by email
+    const patient = await prisma.user.findUnique({
+      where: { email: patientEmail.toLowerCase().trim() }
+    });
+
+    if (!patient) {
+      res.status(404).json({ message: "No user found with this email address. The patient must have an account first." });
+      return;
+    }
+
+    if (patient.role !== "CUSTOMER") {
+      res.status(400).json({ message: "This email does not belong to a patient account." });
+      return;
+    }
+
+    // Create the prescription
+    const prescription = await prisma.prescription.create({
+      data: {
+        doctorId,
+        patientId: patient.id,
+        medications: medications || [],
+        diagnosis: diagnosis || "Medical Certificate",
+        notes: notes || "",
+        fileUrl: fileUrl || undefined,
+        status: "ACTIVE"
+      }
+    });
+
+    // Notify patient via Socket.io
+    try {
+      const { getIO } = require("../socket");
+      const io = getIO();
+      io.to(patient.id).emit("new_prescription", { ...prescription, _id: prescription.id });
+    } catch (err) {
+      console.error("Socket emit failed", err);
+    }
+
+    res.status(201).json({
+      ...prescription,
+      _id: prescription.id,
+      patientName: patient.name,
+      patientEmail: patient.email
+    });
+  } catch (error: any) {
+    res.status(500).json({ message: "Error sending prescription by email", error: error.message });
+  }
+};

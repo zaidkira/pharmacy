@@ -8,12 +8,14 @@ import {
   getPharmacyPrescriptions,
   updatePharmacyPrescriptionStatus,
   getPatientSentPrescriptions,
-  uploadPatientScan
+  uploadPatientScan,
+  sendPrescriptionByEmail
 } from "../controllers/prescriptionController";
 
 const router = express.Router();
 
 router.post("/", protect, doctorOnly, createPrescription);
+router.post("/send-by-email", protect, doctorOnly, sendPrescriptionByEmail);
 router.get("/doctor", protect, doctorOnly, getDoctorPrescriptions);
 router.get("/patient", protect, customerOnly, getPatientPrescriptions);
 router.get("/patient/tracking", protect, customerOnly, getPatientSentPrescriptions);

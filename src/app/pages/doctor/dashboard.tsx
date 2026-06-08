@@ -15,7 +15,10 @@ import {
   MoreVertical,
   Stethoscope,
   Activity,
-  User
+  User,
+  Mail,
+  Upload,
+  FileText
 } from "lucide-react";
 import { Badge } from "../../components/ui/badge";
 import { apiClient } from "../../api/client";
@@ -48,6 +51,16 @@ export function DoctorDashboard() {
     pendingAppointments: 0,
     prescriptionsSent: 0
   });
+
+  // Email prescription state
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+  const [emailPatient, setEmailPatient] = useState("");
+  const [emailDiagnosis, setEmailDiagnosis] = useState("");
+  const [emailNotes, setEmailNotes] = useState("");
+  const [emailFileUrl, setEmailFileUrl] = useState("");
+  const [emailFileUploading, setEmailFileUploading] = useState(false);
+  const [emailMedications, setEmailMedications] = useState([{ name: "", dosage: "", frequency: "", duration: "" }]);
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
 
   const fetchAppointments = async () => {
     setIsLoading(true);
@@ -146,6 +159,71 @@ export function DoctorDashboard() {
     } catch (error: any) {
       toast.error(error.message || "Failed to send prescription");
     }
+  };
+
+  const handleEmailFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const file = files[0];
+    const formData = new FormData();
+    formData.append("prescription", file);
+    setEmailFileUploading(true);
+    try {
+      const token = localStorage.getItem("token");
+      const headers: any = {};
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+      const baseApi = window.location.hostname.includes("localhost") || window.location.hostname.includes("127.0.0.1")
+        ? "http://localhost:5000/api"
+        : `${window.location.origin}/api`;
+      const res = await fetch(`${baseApi}/upload`, { method: "POST", headers, body: formData });
+      if (!res.ok) throw new Error("Upload failed");
+      const data = await res.json();
+      setEmailFileUrl(data.url);
+      toast.success("File uploaded successfully");
+    } catch (err: any) {
+      toast.error(err.message || "File upload failed");
+    } finally {
+      setEmailFileUploading(false);
+    }
+  };
+
+  const handleSendByEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!emailPatient) {
+      toast.error("Please enter a patient email");
+      return;
+    }
+    setIsSendingEmail(true);
+    try {
+      const result = await apiClient("/prescriptions/send-by-email", {
+        method: "POST",
+        body: JSON.stringify({
+          patientEmail: emailPatient,
+          medications: emailMedications.filter(m => m.name.trim()),
+          diagnosis: emailDiagnosis,
+          notes: emailNotes,
+          fileUrl: emailFileUrl || undefined
+        }),
+      });
+      toast.success(`Certificate sent to ${result.patientName || emailPatient}!`);
+      setIsEmailModalOpen(false);
+      setEmailPatient("");
+      setEmailDiagnosis("");
+      setEmailNotes("");
+      setEmailFileUrl("");
+      setEmailMedications([{ name: "", dosage: "", frequency: "", duration: "" }]);
+      fetchAppointments();
+    } catch (error: any) {
+      toast.error(error.message || "Failed to send certificate");
+    } finally {
+      setIsSendingEmail(false);
+    }
+  };
+
+  const handleEmailMedicationChange = (index: number, field: string, value: string) => {
+    const updated = [...emailMedications];
+    updated[index] = { ...updated[index], [field]: value };
+    setEmailMedications(updated);
   };
 
   const handleCompleteAppointment = async (id: string) => {
@@ -426,11 +504,123 @@ export function DoctorDashboard() {
            <div className="space-y-4">
               <h2 className="text-xl font-bold text-gray-800">Quick Actions</h2>
               <div className="grid grid-cols-2 gap-4">
-                 <Button className="h-24 rounded-[1.5rem] bg-emerald-50 border-2 border-emerald-100 hover:bg-emerald-100 flex flex-col gap-2 text-emerald-700 font-bold transition-all">
-                    <Users className="w-6 h-6" />
-                    <span>My Patients</span>
-                 </Button>
-                 <Button className="h-24 rounded-[1.5rem] bg-blue-50 border-2 border-blue-100 hover:bg-blue-100 flex flex-col gap-2 text-blue-700 font-bold transition-all">
+                 <Dialog open={isEmailModalOpen} onOpenChange={setIsEmailModalOpen}>
+                    <DialogTrigger asChild>
+                       <Button className="h-24 rounded-[1.5rem] bg-teal-50 border-2 border-teal-200 hover:bg-teal-100 flex flex-col gap-2 text-teal-700 font-bold transition-all shadow-sm">
+                          <Mail className="w-6 h-6" />
+                          <span className="text-xs leading-tight">Send Certificate<br/>by Email</span>
+                       </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-[600px] rounded-[2rem] max-h-[90vh] overflow-y-auto">
+                       <DialogHeader>
+                          <DialogTitle className="text-2xl text-[#0F766E] flex items-center gap-2">
+                             <Mail className="w-6 h-6" />
+                             Send Certificate / Prescription by Email
+                          </DialogTitle>
+                       </DialogHeader>
+                       <form onSubmit={handleSendByEmail} className="space-y-5 py-4">
+                          {/* Patient Email */}
+                          <div className="space-y-2">
+                             <Label className="font-semibold text-gray-700 flex items-center gap-2">
+                                <Mail className="w-4 h-4 text-[#0F766E]" />
+                                Patient Email Address
+                             </Label>
+                             <Input
+                                type="email"
+                                placeholder="patient@example.com"
+                                value={emailPatient}
+                                onChange={(e) => setEmailPatient(e.target.value)}
+                                required
+                                className="rounded-xl h-12 text-lg"
+                             />
+                             <p className="text-xs text-gray-400">The patient must have a registered account</p>
+                          </div>
+
+                          {/* Diagnosis */}
+                          <div className="space-y-2">
+                             <Label className="font-semibold text-gray-700">Diagnosis / Certificate Title</Label>
+                             <Input
+                                placeholder="e.g. Medical Certificate, Flu Diagnosis"
+                                value={emailDiagnosis}
+                                onChange={(e) => setEmailDiagnosis(e.target.value)}
+                                required
+                                className="rounded-xl"
+                             />
+                          </div>
+
+                          {/* Medications */}
+                          <div className="space-y-3">
+                             <div className="flex items-center justify-between">
+                                <Label className="font-semibold text-gray-700">Medications (optional)</Label>
+                                <Button type="button" onClick={() => setEmailMedications([...emailMedications, { name: "", dosage: "", frequency: "", duration: "" }])} variant="outline" size="sm" className="rounded-xl border-[#B7D1CC] text-xs">
+                                   <Plus className="w-3 h-3 mr-1" /> Add
+                                </Button>
+                             </div>
+                             <div className="space-y-3 max-h-[200px] overflow-y-auto pr-1">
+                                {emailMedications.map((med, idx) => (
+                                   <Card key={idx} className="p-3 rounded-xl border-[#B7D1CC]/50 bg-gray-50/50">
+                                      <div className="grid grid-cols-2 gap-2">
+                                         <div className="col-span-2">
+                                            <Input placeholder="Medicine name" value={med.name} onChange={(e) => handleEmailMedicationChange(idx, 'name', e.target.value)} className="rounded-lg text-sm" />
+                                         </div>
+                                         <Input placeholder="Dosage" value={med.dosage} onChange={(e) => handleEmailMedicationChange(idx, 'dosage', e.target.value)} className="rounded-lg text-sm" />
+                                         <Input placeholder="Frequency" value={med.frequency} onChange={(e) => handleEmailMedicationChange(idx, 'frequency', e.target.value)} className="rounded-lg text-sm" />
+                                         <Input placeholder="Duration" value={med.duration} onChange={(e) => handleEmailMedicationChange(idx, 'duration', e.target.value)} className="rounded-lg text-sm" />
+                                         {emailMedications.length > 1 && (
+                                            <Button type="button" onClick={() => setEmailMedications(emailMedications.filter((_, i) => i !== idx))} variant="ghost" className="text-red-500 hover:bg-red-50 rounded-lg text-xs">
+                                               Remove
+                                            </Button>
+                                         )}
+                                      </div>
+                                   </Card>
+                                ))}
+                             </div>
+                          </div>
+
+                          {/* File Upload */}
+                          <div className="space-y-2">
+                             <Label className="font-semibold text-gray-700 flex items-center gap-2">
+                                <Upload className="w-4 h-4 text-[#0F766E]" />
+                                Attach File (PDF, JPG, PNG)
+                             </Label>
+                             <Input
+                                type="file"
+                                accept=".pdf,.jpg,.jpeg,.png"
+                                onChange={handleEmailFileUpload}
+                                className="rounded-xl file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-teal-50 file:text-[#0F766E] hover:file:bg-teal-100 cursor-pointer"
+                             />
+                             {emailFileUploading && <span className="text-xs text-teal-600 animate-pulse font-semibold">Uploading...</span>}
+                             {emailFileUrl && <p className="text-xs text-emerald-600 font-semibold">✓ File attached successfully</p>}
+                          </div>
+
+                          {/* Notes */}
+                          <div className="space-y-2">
+                             <Label className="font-semibold text-gray-700">Notes / Instructions</Label>
+                             <textarea
+                                className="w-full min-h-[80px] p-4 rounded-2xl border-2 border-gray-100 focus:border-[#0F766E] outline-none transition-all resize-none text-sm"
+                                placeholder="Special instructions, rest days, follow-up date..."
+                                value={emailNotes}
+                                onChange={(e) => setEmailNotes(e.target.value)}
+                             />
+                          </div>
+
+                          <DialogFooter>
+                             <Button
+                                type="submit"
+                                disabled={isSendingEmail || !emailPatient}
+                                className="w-full bg-[#0F766E] hover:bg-[#0d6560] h-14 rounded-2xl text-lg shadow-lg disabled:opacity-50"
+                             >
+                                {isSendingEmail ? (
+                                   <span className="animate-pulse">Sending...</span>
+                                ) : (
+                                   <><Send className="w-5 h-5 mr-2" /> Send to Patient</>  
+                                )}
+                             </Button>
+                          </DialogFooter>
+                       </form>
+                    </DialogContent>
+                 </Dialog>
+                 <Button className="h-24 rounded-[1.5rem] bg-blue-50 border-2 border-blue-100 hover:bg-blue-100 flex flex-col gap-2 text-blue-700 font-bold transition-all shadow-sm">
                     <Clipboard className="w-6 h-6" />
                     <span>History</span>
                  </Button>
