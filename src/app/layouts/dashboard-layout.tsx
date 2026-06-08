@@ -38,9 +38,6 @@ export function DashboardLayout() {
     }
   }, [user, navigate, location.pathname, isLoading]);
 
-  if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-[#B7D1CC]">Loading...</div>;
-  if (!user) return null;
-
   useEffect(() => {
     if (user?.role === "PHARMACY_OWNER") {
       apiClient("/pharmacies/my-pharmacy")
@@ -73,7 +70,10 @@ export function DashboardLayout() {
         })
         .catch(() => console.error("No pharmacy connected for socket notifications"));
     }
-  }, []);
+  }, [user]);
+
+  if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-[#B7D1CC]">Loading...</div>;
+  if (!user) return null;
 
   const handleLogout = () => {
     logout();
