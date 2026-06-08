@@ -25,10 +25,10 @@ app.use(cors());
 app.use(express.json());
 
 // Serve uploaded files statically
-app.use("/uploads", express.static(path.join(__dirname, "../../uploads")));
+app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
 // Serve static files from the built client app
-app.use(express.static(path.join(__dirname, "../../../dist")));
+app.use(express.static(path.join(process.cwd(), "dist")));
 
 // Routes
 app.use("/api/auth", authRoutes);
@@ -41,7 +41,7 @@ app.use("/api/appointments", appointmentRoutes);
 
 // Fallback all other GET requests to client app routes
 app.get("*splat", (req, res) => {
-  res.sendFile(path.join(__dirname, "../../../dist/index.html"));
+  res.sendFile(path.join(process.cwd(), "dist/index.html"));
 });
 
 const PORT = process.env.PORT || 5000;
