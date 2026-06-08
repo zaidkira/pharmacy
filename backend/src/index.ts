@@ -40,7 +40,7 @@ app.use("/api/prescriptions", prescriptionRoutes);
 app.use("/api/appointments", appointmentRoutes);
 
 // Fallback all other GET requests to client app routes
-app.get("/*", (req, res) => {
+app.get("/:splat*", (req, res) => {
   res.sendFile(path.join(__dirname, "../../../dist/index.html"));
 });
 
