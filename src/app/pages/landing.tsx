@@ -49,7 +49,7 @@ export function LandingPage() {
             <p className="text-xl text-gray-700">
               Find nearby pharmacies, search for medicines, and order health packs for chronic diseases – all in one place.
             </p>
-            <div className="flex gap-4">
+            <div className="flex flex-col sm:flex-row gap-4">
               <Link to="/signup">
                 <Button 
                   size="lg" 
