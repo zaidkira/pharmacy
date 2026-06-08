@@ -1,30 +1,14 @@
-
 services:
-  # Backend Web Service
+  # Full-stack Web Service (Serves both frontend and backend)
   - type: web
-    name: pharmasmart-backend
+    name: pharmasmart-fullstack
     env: node
-    rootDir: backend
     buildCommand: npm install && npm run build
-    startCommand: npm start
+    startCommand: npm start --prefix backend
     envVars:
       - key: PORT
-        value: 5000
-      - key: MONGODB_URI
-        sync: false # Set this in Render dashboard
+        value: 10000
+      - key: DATABASE_URL
+        value: postgresql://postgres.dcspovbsftfvujtnbrln:Pharmcysmart20@aws-1-eu-central-1.pooler.supabase.com:5432/postgres
       - key: JWT_SECRET
-        sync: false # Set this in Render dashboard
-
-  # Frontend Static Site
-  - type: static
-    name: pharmasmart-frontend
-    buildCommand: npm install && npm run build
-    staticPublishPath: ./dist
-    pullRequestPreviewsEnabled: false
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
-    envVars:
-      - key: VITE_API_BASE_URL
-        value: https://pharmasmart-backend.onrender.com/api
+        value: default_dev_secret
