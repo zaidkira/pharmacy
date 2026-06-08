@@ -826,7 +826,7 @@ export function AccountPage() {
                               #{order._id.slice(-6).toUpperCase()}
                             </div>
                             <div>
-                              <p className="text-sm font-bold text-gray-800">{order.userId.name}</p>
+                              <p className="text-sm font-bold text-gray-800">{order.userId?.name || "Anonymous Patient"}</p>
                               <p className="text-[10px] text-gray-400">{new Date(order.createdAt).toLocaleDateString()}</p>
                             </div>
                           </div>
