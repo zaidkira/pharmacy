@@ -92,7 +92,9 @@ export function DashboardLayout() {
       { path: "/dashboard/consultations", icon: Stethoscope, label: "Consultations" },
       { path: "/dashboard/prescriptions", icon: Clipboard, label: "My Prescriptions" },
     ] : []),
-    { path: "/dashboard/orders", icon: ShoppingCart, label: user?.role === "PHARMACY_OWNER" ? "Client Orders" : "Orders" },
+    ...(user?.role !== "DOCTOR" ? [
+      { path: "/dashboard/orders", icon: ShoppingCart, label: user?.role === "PHARMACY_OWNER" ? "Client Orders" : "Orders" },
+    ] : []),
     { path: "/dashboard/account", icon: User, label: "Account" },
     ...(user?.role !== "PHARMACY_OWNER" ? [
       { path: "/dashboard/profile", icon: User, label: "Settings" },
