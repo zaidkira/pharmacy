@@ -83,6 +83,18 @@ export const sendPrescriptionToPharmacy = async (req: Request, res: Response): P
     const { prescriptionId, pharmacyId } = req.body;
     const patientId = (req as any).user.id;
 
+    // Resolve the pharmacy owner's User ID (since pharmacyId in the UI represents the Pharmacy table ID, but relations map to User)
+    const pharmacy = await prisma.pharmacy.findUnique({
+      where: { id: pharmacyId }
+    });
+
+    if (!pharmacy) {
+      res.status(404).json({ message: "Pharmacy not found" });
+      return;
+    }
+
+    const targetUserId = pharmacy.userId;
+
     const prescription = await prisma.prescription.findUnique({ where: { id: prescriptionId } });
 
     if (!prescription) {
@@ -92,13 +104,13 @@ export const sendPrescriptionToPharmacy = async (req: Request, res: Response): P
 
     await prisma.prescription.update({
       where: { id: prescriptionId },
-      data: { pharmacyId, status: "SENT_TO_PHARMACY" }
+      data: { pharmacyId: targetUserId, status: "SENT_TO_PHARMACY" }
     });
 
     const pharmacyPresc = await prisma.pharmacyPrescription.create({
       data: {
         prescriptionId,
-        pharmacyId,
+        pharmacyId: targetUserId,
         patientId,
         status: "Received"
       }
@@ -107,7 +119,7 @@ export const sendPrescriptionToPharmacy = async (req: Request, res: Response): P
     try {
       const { getIO } = require("../socket");
       const io = getIO();
-      io.to(pharmacyId).emit("new_pharmacy_prescription", { ...pharmacyPresc, _id: pharmacyPresc.id });
+      io.to(targetUserId).emit("new_pharmacy_prescription", { ...pharmacyPresc, _id: pharmacyPresc.id });
     } catch (err) {
       console.error("Socket emit failed", err);
     }
@@ -204,6 +216,18 @@ export const uploadPatientScan = async (req: Request, res: Response): Promise<vo
     const { pharmacyId, fileUrl, diagnosis, notes } = req.body;
     const patientId = (req as any).user.id;
 
+    // Resolve the pharmacy owner's User ID
+    const pharmacy = await prisma.pharmacy.findUnique({
+      where: { id: pharmacyId }
+    });
+
+    if (!pharmacy) {
+      res.status(404).json({ message: "Pharmacy not found" });
+      return;
+    }
+
+    const targetUserId = pharmacy.userId;
+
     // 1. Create a custom self-uploaded prescription
     const prescription = await prisma.prescription.create({
       data: {
@@ -213,7 +237,7 @@ export const uploadPatientScan = async (req: Request, res: Response): Promise<vo
         notes: notes || "Patient self-uploaded attachment",
         fileUrl,
         status: "SENT_TO_PHARMACY",
-        pharmacyId
+        pharmacyId: targetUserId
       }
     });
 
@@ -221,7 +245,7 @@ export const uploadPatientScan = async (req: Request, res: Response): Promise<vo
     const pharmacyPresc = await prisma.pharmacyPrescription.create({
       data: {
         prescriptionId: prescription.id,
-        pharmacyId,
+        pharmacyId: targetUserId,
         patientId,
         status: "Received",
         pharmacistNotes: ""
@@ -232,7 +256,7 @@ export const uploadPatientScan = async (req: Request, res: Response): Promise<vo
     try {
       const { getIO } = require("../socket");
       const io = getIO();
-      io.to(pharmacyId).emit("new_pharmacy_prescription", { ...pharmacyPresc, _id: pharmacyPresc.id });
+      io.to(targetUserId).emit("new_pharmacy_prescription", { ...pharmacyPresc, _id: pharmacyPresc.id });
     } catch (err) {
       console.error("Socket emit failed", err);
     }
