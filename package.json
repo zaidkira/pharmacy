@@ -4,7 +4,7 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "build": "vite build && npm run build --prefix backend",
+    "build": "npm install --prefix backend && vite build && npm run build --prefix backend",
     "dev": "vite",
     "seed": "npm run seed --prefix backend"
   },
