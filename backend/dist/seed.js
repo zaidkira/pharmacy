@@ -12,99 +12,141 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-const mongoose_1 = __importDefault(require("mongoose"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
-const User_1 = __importDefault(require("./models/User"));
-const Pharmacy_1 = __importDefault(require("./models/Pharmacy"));
-const Medicine_1 = __importDefault(require("./models/Medicine"));
+const client_1 = require("@prisma/client");
+const adapter_pg_1 = require("@prisma/adapter-pg");
+const pg_1 = require("pg");
 dotenv_1.default.config();
+const pool = new pg_1.Pool({ connectionString: process.env.DATABASE_URL });
+const adapter = new adapter_pg_1.PrismaPg(pool);
+const prisma = new client_1.PrismaClient({ adapter });
 const seedData = () => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        yield mongoose_1.default.connect(process.env.MONGODB_URI || "");
-        console.log("✅ Connected to MongoDB for seeding...");
-        // 1. Clear existing data
-        yield User_1.default.deleteMany();
-        yield Pharmacy_1.default.deleteMany();
-        yield Medicine_1.default.deleteMany();
+        yield prisma.$connect();
+        console.log("✅ Connected to PostgreSQL for seeding...");
+        // 1. Clear existing data (order matters due to foreign keys)
+        yield prisma.pharmacyPrescription.deleteMany();
+        yield prisma.prescription.deleteMany();
+        yield prisma.appointment.deleteMany();
+        yield prisma.order.deleteMany();
+        yield prisma.medicine.deleteMany();
+        yield prisma.pharmacy.deleteMany();
+        yield prisma.user.deleteMany();
         console.log("🗑️  Cleared existing data.");
-        // 2. Create Admin/Owner User
+        // 2. Create Admin User
         const salt = yield bcryptjs_1.default.genSalt(10);
         const hashedPassword = yield bcryptjs_1.default.hash("password123", salt);
-        const admin = yield User_1.default.create({
-            name: "Admin User",
-            email: "admin@pharmasmart.com",
-            password: hashedPassword,
-            phone: "1234567890",
-            role: "ADMIN"
+        const admin = yield prisma.user.create({
+            data: {
+                name: "Admin User",
+                email: "admin@pharmasmart.com",
+                password: hashedPassword,
+                phone: "1234567890",
+                role: "ADMIN"
+            }
         });
         console.log("👤 Created Admin User.");
-        // 3. Create Pharmacies
-        const pharmacy1 = yield Pharmacy_1.default.create({
-            name: "HealthPlus Pharmacy",
-            ownerId: admin._id,
-            address: "123 Main Street, Downtown",
-            phone: "+1 (555) 123-4567",
-            licenseNumber: "LP-12345",
-            isApproved: true,
-            location: { type: "Point", coordinates: [-74.0060, 40.7128] }
-        });
-        const pharmacy2 = yield Pharmacy_1.default.create({
-            name: "MediCare Central",
-            ownerId: admin._id,
-            address: "456 Oak Avenue, Midtown",
-            phone: "+1 (555) 234-5678",
-            licenseNumber: "LP-67890",
-            isApproved: true,
-            location: { type: "Point", coordinates: [-73.9855, 40.7580] }
-        });
-        console.log("🏥 Created 2 Pharmacies.");
-        // 4. Create Medicines
-        const medicines = [
-            {
-                name: "Paracetamol 500mg",
-                pharmacyId: pharmacy1._id,
-                category: "Pain Relief",
-                description: "Effective pain and fever relief",
-                price: 8.99,
-                stockQuantity: 100,
-                imageUrl: "https://images.unsplash.com/photo-1646392206581-2527b1cae5cb?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080",
-                requiresPrescription: false
-            },
-            {
-                name: "Amoxicillin 250mg",
-                pharmacyId: pharmacy1._id,
-                category: "Antibiotics",
-                description: "Broad-spectrum antibiotic",
-                price: 15.99,
-                stockQuantity: 50,
-                imageUrl: "https://images.unsplash.com/photo-1631669969504-f35518bf96ba?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080",
-                requiresPrescription: true
-            },
-            {
-                name: "Vitamin D3 1000 IU",
-                pharmacyId: pharmacy2._id,
-                category: "Vitamins",
-                description: "Essential vitamin supplement",
-                price: 12.50,
-                stockQuantity: 200,
-                imageUrl: "https://images.unsplash.com/photo-1768403305881-a7a82fd63512?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080",
-                requiresPrescription: false
-            },
-            {
-                name: "Ibuprofen 400mg",
-                pharmacyId: pharmacy2._id,
-                category: "Pain Relief",
-                description: "Anti-inflammatory pain reliever",
-                price: 10.99,
-                stockQuantity: 75,
-                imageUrl: "https://images.unsplash.com/photo-1646392206581-2527b1cae5cb?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080",
-                requiresPrescription: false
+        // 3. Create Pharmacy Owner
+        const ownerPassword = yield bcryptjs_1.default.hash("password123", salt);
+        const pharmacyOwner = yield prisma.user.create({
+            data: {
+                name: "Pharmacy Owner",
+                email: "owner@pharmasmart.com",
+                password: ownerPassword,
+                phone: "0987654321",
+                role: "PHARMACY_OWNER"
             }
-        ];
-        yield Medicine_1.default.insertMany(medicines);
+        });
+        // 4. Create Doctor
+        const doctorPassword = yield bcryptjs_1.default.hash("password123", salt);
+        const doctor = yield prisma.user.create({
+            data: {
+                name: "Dr. Ahmed",
+                email: "doctor@pharmasmart.com",
+                password: doctorPassword,
+                phone: "1112223333",
+                role: "DOCTOR",
+                specialization: "General Medicine",
+                licenseNumber: "LIC-001",
+                status: "ACTIVE",
+                schedule: { days: ["Monday", "Wednesday", "Friday"], timeSlots: ["09:00", "10:00", "11:00", "14:00", "15:00"] }
+            }
+        });
+        // 5. Create Customer
+        const customerPassword = yield bcryptjs_1.default.hash("password123", salt);
+        const customer = yield prisma.user.create({
+            data: {
+                name: "Customer User",
+                email: "customer@pharmasmart.com",
+                password: customerPassword,
+                phone: "4445556666",
+                role: "CUSTOMER"
+            }
+        });
+        console.log("👤 Created Doctor, Pharmacy Owner, and Customer.");
+        // 6. Create Pharmacies
+        const pharmacy1 = yield prisma.pharmacy.create({
+            data: {
+                name: "HealthPlus Pharmacy",
+                userId: pharmacyOwner.id,
+                address: "123 Main Street, Downtown",
+                phone: "+1 (555) 123-4567",
+                email: "healthplus@pharmasmart.com"
+            }
+        });
+        console.log("🏥 Created Pharmacy.");
+        // 7. Create Medicines
+        yield prisma.medicine.createMany({
+            data: [
+                {
+                    name: "Paracetamol 500mg",
+                    pharmacyId: pharmacyOwner.id,
+                    category: "Pain Relief",
+                    description: "Effective pain and fever relief",
+                    price: 8.99,
+                    stock: 100,
+                    requiresPrescription: false
+                },
+                {
+                    name: "Amoxicillin 250mg",
+                    pharmacyId: pharmacyOwner.id,
+                    category: "Antibiotics",
+                    description: "Broad-spectrum antibiotic",
+                    price: 15.99,
+                    stock: 50,
+                    requiresPrescription: true
+                },
+                {
+                    name: "Vitamin D3 1000 IU",
+                    pharmacyId: pharmacyOwner.id,
+                    category: "Vitamins",
+                    description: "Essential vitamin supplement",
+                    price: 12.50,
+                    stock: 200,
+                    requiresPrescription: false
+                },
+                {
+                    name: "Ibuprofen 400mg",
+                    pharmacyId: pharmacyOwner.id,
+                    category: "Pain Relief",
+                    description: "Anti-inflammatory pain reliever",
+                    price: 10.99,
+                    stock: 75,
+                    requiresPrescription: false
+                }
+            ]
+        });
         console.log("💊 Created 4 Medicines.");
         console.log("✨ Seeding Complete!");
+        console.log("\nLogin Credentials:");
+        console.log("  Admin:    admin@pharmasmart.com / password123");
+        console.log("  Owner:    owner@pharmasmart.com / password123");
+        console.log("  Doctor:   doctor@pharmasmart.com / password123");
+        console.log("  Customer: customer@pharmasmart.com / password123");
+        // Close resources
+        yield prisma.$disconnect();
+        yield pool.end();
         process.exit(0);
     }
     catch (error) {

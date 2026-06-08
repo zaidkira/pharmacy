@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
-import User from "../models/User";
+import { prisma } from "../config/db";
 
 export interface AuthRequest extends Request {
   user?: any;
@@ -14,7 +14,31 @@ export const protect = async (req: AuthRequest, res: Response, next: NextFunctio
       token = req.headers.authorization.split(" ")[1];
       const decoded: any = jwt.verify(token, process.env.JWT_SECRET || "default_dev_secret");
 
-      req.user = await User.findById(decoded.id).select("-password");
+      const user = await prisma.user.findUnique({
+        where: { id: decoded.id },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          phone: true,
+          address: true,
+          specialization: true,
+          licenseNumber: true,
+          status: true,
+          schedule: true,
+          healthProfile: true,
+          createdAt: true
+        }
+      });
+
+      if (!user) {
+        res.status(401).json({ message: "Not authorized, user not found" });
+        return;
+      }
+
+      // Add _id alias for frontend compatibility
+      req.user = { ...user, _id: user.id };
       next();
     } catch (error) {
       res.status(401).json({ message: "Not authorized, token failed" });
@@ -58,4 +82,3 @@ export const pharmacyOnly = (req: AuthRequest, res: Response, next: NextFunction
     res.status(403).json({ message: "Not authorized. Only pharmacies can perform this action." });
   }
 };
-

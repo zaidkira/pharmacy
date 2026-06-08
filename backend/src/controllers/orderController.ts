@@ -1,7 +1,5 @@
 import { Request, Response } from "express";
-import Order from "../models/Order";
-import Medicine from "../models/Medicine";
-import Pharmacy from "../models/Pharmacy";
+import { prisma } from "../config/db";
 import { getIO } from "../socket";
 
 export const createOrder = async (req: Request | any, res: Response) => {
@@ -20,44 +18,45 @@ export const createOrder = async (req: Request | any, res: Response) => {
 
     // 1. Check stock availability for all items
     for (const item of items) {
-      const medicine = await Medicine.findById(item.medicineId);
+      const medicine = await prisma.medicine.findUnique({ where: { id: item.medicineId } });
       if (!medicine) {
         res.status(404).json({ message: `Medicine not found: ${item.name}` });
         return;
       }
-      if (medicine.stockQuantity < item.quantity) {
-        res.status(400).json({ message: `Insufficient stock for ${medicine.name}. Available: ${medicine.stockQuantity}` });
+      if (medicine.stock < item.quantity) {
+        res.status(400).json({ message: `Insufficient stock for ${medicine.name}. Available: ${medicine.stock}` });
         return;
       }
     }
 
-    // 2. Reduce stock and create order
-    const order = new Order({
-      userId: req.user._id,
-      pharmacyId,
-      items,
-      totalAmount,
-      prescriptionUrl,
-      status: "PENDING"
+    // 2. Create order
+    const order = await prisma.order.create({
+      data: {
+        userId: req.user.id,
+        pharmacyId,
+        items: items || [],
+        totalAmount,
+        prescriptionUrl,
+        status: "PENDING"
+      }
     });
 
-    const createdOrder = await order.save();
-
-    // Deduct from stock
+    // 3. Deduct from stock
     for (const item of items) {
-      await Medicine.findByIdAndUpdate(item.medicineId, {
-        $inc: { stockQuantity: -item.quantity }
+      await prisma.medicine.update({
+        where: { id: item.medicineId },
+        data: { stock: { decrement: item.quantity } }
       });
     }
 
-    // 3. Emit real-time notification to the Pharmacy
+    // 4. Emit real-time notification to the Pharmacy
     try {
-      getIO().to(pharmacyId).emit("new_order", createdOrder);
+      getIO().to(pharmacyId).emit("new_order", { ...order, _id: order.id });
     } catch (socketError) {
       console.error("Socket error on order creation:", socketError);
     }
 
-    res.status(201).json(createdOrder);
+    res.status(201).json({ ...order, _id: order.id });
   } catch (error: any) {
     res.status(500).json({ message: "Server error", error: error.message });
   }
@@ -65,10 +64,18 @@ export const createOrder = async (req: Request | any, res: Response) => {
 
 export const getUserOrders = async (req: Request | any, res: Response) => {
   try {
-    const orders = await Order.find({ userId: req.user._id })
-      .populate("pharmacyId", "name address")
-      .sort({ createdAt: -1 });
-    res.json(orders);
+    const orders = await prisma.order.findMany({
+      where: { userId: req.user.id },
+      include: { pharmacy: { select: { id: true, name: true } } },
+      orderBy: { createdAt: "desc" }
+    });
+    // Map for frontend compatibility - pharmacy info comes from User table
+    const mapped = orders.map(o => ({
+      ...o,
+      _id: o.id,
+      pharmacyId: o.pharmacy ? { ...o.pharmacy, _id: o.pharmacy.id } : null
+    }));
+    res.json(mapped);
   } catch (error: any) {
     res.status(500).json({ message: "Server error", error: error.message });
   }
@@ -76,11 +83,20 @@ export const getUserOrders = async (req: Request | any, res: Response) => {
 
 export const getAllOrders = async (req: Request, res: Response) => {
   try {
-    const orders = await Order.find({})
-      .populate("userId", "name email")
-      .populate("pharmacyId", "name")
-      .sort({ createdAt: -1 });
-    res.json(orders);
+    const orders = await prisma.order.findMany({
+      include: {
+        user: { select: { id: true, name: true, email: true } },
+        pharmacy: { select: { id: true, name: true } }
+      },
+      orderBy: { createdAt: "desc" }
+    });
+    const mapped = orders.map(o => ({
+      ...o,
+      _id: o.id,
+      userId: { ...o.user, _id: o.user.id },
+      pharmacyId: o.pharmacy ? { ...o.pharmacy, _id: o.pharmacy.id } : null
+    }));
+    res.json(mapped);
   } catch (error: any) {
     res.status(500).json({ message: "Server error", error: error.message });
   }
@@ -88,10 +104,17 @@ export const getAllOrders = async (req: Request, res: Response) => {
 
 export const getPharmacyOrders = async (req: Request | any, res: Response) => {
   try {
-    const orders = await Order.find({ pharmacyId: req.params.pharmacyId })
-      .populate("userId", "name email phone")
-      .sort({ createdAt: -1 });
-    res.json(orders);
+    const orders = await prisma.order.findMany({
+      where: { pharmacyId: req.params.pharmacyId },
+      include: { user: { select: { id: true, name: true, email: true, phone: true } } },
+      orderBy: { createdAt: "desc" }
+    });
+    const mapped = orders.map(o => ({
+      ...o,
+      _id: o.id,
+      userId: { ...o.user, _id: o.user.id }
+    }));
+    res.json(mapped);
   } catch (error: any) {
     res.status(500).json({ message: "Server error", error: error.message });
   }
@@ -99,14 +122,23 @@ export const getPharmacyOrders = async (req: Request | any, res: Response) => {
 
 export const getIncomingOrders = async (req: Request | any, res: Response) => {
   try {
-    const pharmacy = await Pharmacy.findOne({ ownerId: req.user._id });
+    const pharmacy = await prisma.pharmacy.findUnique({ where: { userId: req.user.id } });
     if (!pharmacy) {
-      return res.status(404).json({ message: "No pharmacy associated with this account" });
+      res.status(404).json({ message: "No pharmacy associated with this account" });
+      return;
     }
-    const orders = await Order.find({ pharmacyId: pharmacy._id })
-      .populate("userId", "name email phone")
-      .sort({ createdAt: -1 });
-    res.json(orders);
+    // Orders reference pharmacyId pointing to the User id (the pharmacy owner)
+    const orders = await prisma.order.findMany({
+      where: { pharmacyId: req.user.id },
+      include: { user: { select: { id: true, name: true, email: true, phone: true } } },
+      orderBy: { createdAt: "desc" }
+    });
+    const mapped = orders.map(o => ({
+      ...o,
+      _id: o.id,
+      userId: { ...o.user, _id: o.user.id }
+    }));
+    res.json(mapped);
   } catch (error: any) {
     res.status(500).json({ message: "Server error", error: error.message });
   }
@@ -114,21 +146,27 @@ export const getIncomingOrders = async (req: Request | any, res: Response) => {
 
 export const updateOrderStatus = async (req: Request | any, res: Response) => {
   try {
-    const order = await Order.findById(req.params.id);
-    if (!order) return res.status(404).json({ message: "Order not found" });
+    const order = await prisma.order.findUnique({ where: { id: req.params.id } });
+    if (!order) {
+      res.status(404).json({ message: "Order not found" });
+      return;
+    }
 
     // Allow if ADMIN or if user is the PHARMACY_OWNER of this pharmacy
     if (req.user.role !== "ADMIN") {
-      const pharmacy = await Pharmacy.findById(order.pharmacyId);
-      if (!pharmacy || pharmacy.ownerId.toString() !== req.user._id.toString()) {
-        return res.status(403).json({ message: "Not authorized to update this order" });
+      const pharmacy = await prisma.pharmacy.findUnique({ where: { userId: req.user.id } });
+      if (!pharmacy || order.pharmacyId !== req.user.id) {
+        res.status(403).json({ message: "Not authorized to update this order" });
+        return;
       }
     }
 
-    order.status = req.body.status;
-    await order.save();
+    const updatedOrder = await prisma.order.update({
+      where: { id: req.params.id },
+      data: { status: req.body.status }
+    });
     
-    res.json(order);
+    res.json({ ...updatedOrder, _id: updatedOrder.id });
   } catch (error: any) {
     res.status(500).json({ message: "Update failed", error: error.message });
   }

@@ -12,17 +12,22 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.connectDB = void 0;
-const mongoose_1 = __importDefault(require("mongoose"));
+exports.connectDB = exports.prisma = void 0;
+const client_1 = require("@prisma/client");
+const adapter_pg_1 = require("@prisma/adapter-pg");
+const pg_1 = require("pg");
 const dotenv_1 = __importDefault(require("dotenv"));
 dotenv_1.default.config();
+const pool = new pg_1.Pool({ connectionString: process.env.DATABASE_URL });
+const adapter = new adapter_pg_1.PrismaPg(pool);
+exports.prisma = new client_1.PrismaClient({ adapter });
 const connectDB = () => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const conn = yield mongoose_1.default.connect(process.env.MONGODB_URI || "mongodb://localhost:27017/pharmasmart");
-        console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
+        yield exports.prisma.$connect();
+        console.log("🐘 Supabase PostgreSQL connected successfully via Prisma and PG Driver Adapter");
     }
     catch (error) {
-        console.error(`❌ Error: ${error.message}`);
+        console.error("❌ PostgreSQL database connection failure:", error);
         process.exit(1);
     }
 });

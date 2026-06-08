@@ -1,0 +1,137 @@
+// Prisma schema file for PharmaSmart SQL migration
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id             String         @id @default(uuid())
+  name           String
+  email          String         @unique
+  password       String
+  role           String         @default("CUSTOMER") // ADMIN, CUSTOMER, PHARMACY_OWNER, DOCTOR
+  phone          String?
+  address        String?
+  specialization String?
+  licenseNumber  String?
+  status         String         @default("ACTIVE") // ACTIVE, INACTIVE for doctors
+  
+  // Doctor availability schedule stored as JSON
+  schedule       Json?          // { days: string[], timeSlots: string[] }
+  
+  // Health profile details stored as JSON
+  healthProfile  Json?          // { conditions: string[], allergies: string[], medications: string[], bloodType: string, emergencyContact: { name: string, relationship: string, phone: string } }
+  
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  // Relations
+  appointmentsAsDoctor  Appointment[] @relation("DoctorAppointments")
+  appointmentsAsPatient Appointment[] @relation("PatientAppointments")
+  
+  prescriptionsAsDoctor Prescription[] @relation("DoctorPrescriptions")
+  prescriptionsAsPatient Prescription[] @relation("PatientPrescriptions")
+  prescriptionsAsPharmacy Prescription[] @relation("PharmacyPrescriptions")
+
+  pharmacyPrescriptions PharmacyPrescription[] @relation("PharmacyPrescriptionRelation")
+  patientPharmacyPrescriptions PharmacyPrescription[] @relation("PatientPharmacyPrescriptionRelation")
+
+  orders                Order[]       @relation("UserOrders")
+  pharmacyOrders        Order[]       @relation("PharmacyOrders")
+  medicines             Medicine[]    @relation("PharmacyMedicines")
+  pharmacyProfile       Pharmacy?     @relation("PharmacyUserProfile")
+}
+
+model Pharmacy {
+  id        String   @id @default(uuid())
+  name      String
+  address   String
+  phone     String?
+  email     String?
+  userId    String   @unique
+  user      User     @relation("PharmacyUserProfile", fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Medicine {
+  id                  String   @id @default(uuid())
+  name                String
+  description         String?
+  price               Float
+  category            String?
+  stock               Int      @default(0)
+  requiresPrescription Boolean  @default(false)
+  image               String?
+  pharmacyId          String
+  pharmacy            User     @relation("PharmacyMedicines", fields: [pharmacyId], references: [id], onDelete: Cascade)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+model Order {
+  id              String      @id @default(uuid())
+  userId          String
+  user            User        @relation("UserOrders", fields: [userId], references: [id], onDelete: Cascade)
+  pharmacyId      String
+  pharmacy        User        @relation("PharmacyOrders", fields: [pharmacyId], references: [id], onDelete: Cascade)
+  items           Json        // [{ medicineId: string, name: string, quantity: number, price: number }]
+  totalAmount     Float
+  status          String      @default("PENDING") // PENDING, PROCESSING, DELIVERED, CANCELLED
+  prescriptionUrl String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+}
+
+model Appointment {
+  id        String   @id @default(uuid())
+  doctorId  String
+  doctor    User     @relation("DoctorAppointments", fields: [doctorId], references: [id], onDelete: Cascade)
+  patientId String
+  patient   User     @relation("PatientAppointments", fields: [patientId], references: [id], onDelete: Cascade)
+  date      String   // YYYY-MM-DD
+  time      String   // HH:mm
+  status    String   @default("SCHEDULED") // PENDING, SCHEDULED, IN_PROGRESS, COMPLETED, CANCELLED
+  reason    String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Prescription {
+  id          String             @id @default(uuid())
+  doctorId    String
+  doctor      User               @relation("DoctorPrescriptions", fields: [doctorId], references: [id], onDelete: Cascade)
+  patientId   String
+  patient     User               @relation("PatientPrescriptions", fields: [patientId], references: [id], onDelete: Cascade)
+  pharmacyId  String?
+  pharmacy    User?              @relation("PharmacyPrescriptions", fields: [pharmacyId], references: [id], onDelete: SetNull)
+  medications Json               // [{ name: string, dosage: string, frequency: string, duration: string }]
+  diagnosis   String?
+  notes       String?
+  status      String             @default("ACTIVE") // ACTIVE, SENT_TO_PHARMACY, COMPLETED, EXPIRED
+  date        DateTime           @default(now())
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  pharmacySends PharmacyPrescription[]
+}
+
+model PharmacyPrescription {
+  id              String       @id @default(uuid())
+  prescriptionId  String
+  prescription    Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  pharmacyId      String
+  pharmacy        User         @relation("PharmacyPrescriptionRelation", fields: [pharmacyId], references: [id], onDelete: Cascade)
+  patientId       String
+  patient         User         @relation("PatientPharmacyPrescriptionRelation", fields: [patientId], references: [id], onDelete: Cascade)
+  status          String       @default("Received") // Received, Processing, Ready for Pickup, Completed
+  pharmacistNotes String       @default("")
+  sentAt          DateTime     @default(now())
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+}

@@ -8,33 +8,17 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.updateMyPharmacy = exports.getMyPharmacy = exports.deletePharmacy = exports.updatePharmacy = exports.createPharmacy = exports.getPharmacies = void 0;
-const Pharmacy_1 = __importDefault(require("../models/Pharmacy"));
+const db_1 = require("../config/db");
 const getPharmacies = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { lat, lng, maxDistance = 50000 } = req.query;
-        let pharmacies;
-        if (lat && lng) {
-            pharmacies = yield Pharmacy_1.default.find({
-                location: {
-                    $near: {
-                        $geometry: {
-                            type: "Point",
-                            coordinates: [parseFloat(lng), parseFloat(lat)]
-                        },
-                        $maxDistance: parseInt(maxDistance) // in meters
-                    }
-                }
-            });
-        }
-        else {
-            pharmacies = yield Pharmacy_1.default.find();
-        }
-        res.json(pharmacies);
+        // PostgreSQL doesn't have $near geospatial by default, so return all pharmacies
+        const pharmacies = yield db_1.prisma.pharmacy.findMany({
+            include: { user: { select: { name: true } } }
+        });
+        const mapped = pharmacies.map(p => (Object.assign(Object.assign({}, p), { _id: p.id })));
+        res.json(mapped);
     }
     catch (error) {
         res.status(500).json({ message: "Server Error", error: error.message });
@@ -43,14 +27,22 @@ const getPharmacies = (req, res) => __awaiter(void 0, void 0, void 0, function* 
 exports.getPharmacies = getPharmacies;
 const createPharmacy = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const existing = yield Pharmacy_1.default.findOne({ ownerId: req.user._id });
+        const existing = yield db_1.prisma.pharmacy.findUnique({ where: { userId: req.user.id } });
         if (existing && req.user.role !== "ADMIN") {
-            return res.status(400).json({ message: "You already have a pharmacy registered" });
+            res.status(400).json({ message: "You already have a pharmacy registered" });
+            return;
         }
-        const pharmacyData = Object.assign(Object.assign({}, req.body), { ownerId: req.user.role === "ADMIN" ? (req.body.ownerId || req.user._id) : req.user._id });
-        const pharmacy = new Pharmacy_1.default(pharmacyData);
-        const createdPharmacy = yield pharmacy.save();
-        res.status(201).json(createdPharmacy);
+        const ownerId = req.user.role === "ADMIN" ? (req.body.ownerId || req.user.id) : req.user.id;
+        const pharmacy = yield db_1.prisma.pharmacy.create({
+            data: {
+                name: req.body.name,
+                address: req.body.address,
+                phone: req.body.phone,
+                email: req.body.email,
+                userId: ownerId
+            }
+        });
+        res.status(201).json(Object.assign(Object.assign({}, pharmacy), { _id: pharmacy.id }));
     }
     catch (error) {
         res.status(400).json({ message: "Invalid data", error: error.message });
@@ -59,10 +51,17 @@ const createPharmacy = (req, res) => __awaiter(void 0, void 0, void 0, function*
 exports.createPharmacy = createPharmacy;
 const updatePharmacy = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const pharmacy = yield Pharmacy_1.default.findByIdAndUpdate(req.params.id, req.body, { new: true });
-        if (!pharmacy)
-            return res.status(404).json({ message: "Pharmacy not found" });
-        res.json(pharmacy);
+        const id = req.params.id;
+        const pharmacy = yield db_1.prisma.pharmacy.update({
+            where: { id },
+            data: {
+                name: req.body.name,
+                address: req.body.address,
+                phone: req.body.phone,
+                email: req.body.email
+            }
+        });
+        res.json(Object.assign(Object.assign({}, pharmacy), { _id: pharmacy.id }));
     }
     catch (error) {
         res.status(400).json({ message: "Update failed", error: error.message });
@@ -71,9 +70,8 @@ const updatePharmacy = (req, res) => __awaiter(void 0, void 0, void 0, function*
 exports.updatePharmacy = updatePharmacy;
 const deletePharmacy = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const pharmacy = yield Pharmacy_1.default.findByIdAndDelete(req.params.id);
-        if (!pharmacy)
-            return res.status(404).json({ message: "Pharmacy not found" });
+        const id = req.params.id;
+        yield db_1.prisma.pharmacy.delete({ where: { id } });
         res.json({ message: "Pharmacy deleted" });
     }
     catch (error) {
@@ -83,11 +81,12 @@ const deletePharmacy = (req, res) => __awaiter(void 0, void 0, void 0, function*
 exports.deletePharmacy = deletePharmacy;
 const getMyPharmacy = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const pharmacy = yield Pharmacy_1.default.findOne({ ownerId: req.user._id });
+        const pharmacy = yield db_1.prisma.pharmacy.findUnique({ where: { userId: req.user.id } });
         if (!pharmacy) {
-            return res.status(404).json({ message: "No pharmacy found for this owner" });
+            res.status(404).json({ message: "No pharmacy found for this owner" });
+            return;
         }
-        res.json(pharmacy);
+        res.json(Object.assign(Object.assign({}, pharmacy), { _id: pharmacy.id }));
     }
     catch (error) {
         res.status(500).json({ message: "Server Error", error: error.message });
@@ -96,10 +95,16 @@ const getMyPharmacy = (req, res) => __awaiter(void 0, void 0, void 0, function* 
 exports.getMyPharmacy = getMyPharmacy;
 const updateMyPharmacy = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const pharmacy = yield Pharmacy_1.default.findOneAndUpdate({ ownerId: req.user._id }, req.body, { new: true });
-        if (!pharmacy)
-            return res.status(404).json({ message: "Pharmacy not found" });
-        res.json(pharmacy);
+        const pharmacy = yield db_1.prisma.pharmacy.update({
+            where: { userId: req.user.id },
+            data: {
+                name: req.body.name,
+                address: req.body.address,
+                phone: req.body.phone,
+                email: req.body.email
+            }
+        });
+        res.json(Object.assign(Object.assign({}, pharmacy), { _id: pharmacy.id }));
     }
     catch (error) {
         res.status(400).json({ message: "Update failed", error: error.message });

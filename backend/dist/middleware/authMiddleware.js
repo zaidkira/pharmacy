@@ -12,16 +12,38 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.customerOnly = exports.adminOnly = exports.protect = void 0;
+exports.pharmacyOnly = exports.doctorOnly = exports.customerOnly = exports.adminOnly = exports.protect = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
-const User_1 = __importDefault(require("../models/User"));
+const db_1 = require("../config/db");
 const protect = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     let token;
     if (req.headers.authorization && req.headers.authorization.startsWith("Bearer")) {
         try {
             token = req.headers.authorization.split(" ")[1];
             const decoded = jsonwebtoken_1.default.verify(token, process.env.JWT_SECRET || "default_dev_secret");
-            req.user = yield User_1.default.findById(decoded.id).select("-password");
+            const user = yield db_1.prisma.user.findUnique({
+                where: { id: decoded.id },
+                select: {
+                    id: true,
+                    name: true,
+                    email: true,
+                    role: true,
+                    phone: true,
+                    address: true,
+                    specialization: true,
+                    licenseNumber: true,
+                    status: true,
+                    schedule: true,
+                    healthProfile: true,
+                    createdAt: true
+                }
+            });
+            if (!user) {
+                res.status(401).json({ message: "Not authorized, user not found" });
+                return;
+            }
+            // Add _id alias for frontend compatibility
+            req.user = Object.assign(Object.assign({}, user), { _id: user.id });
             next();
         }
         catch (error) {
@@ -52,3 +74,21 @@ const customerOnly = (req, res, next) => {
     }
 };
 exports.customerOnly = customerOnly;
+const doctorOnly = (req, res, next) => {
+    if (req.user && req.user.role === "DOCTOR") {
+        next();
+    }
+    else {
+        res.status(403).json({ message: "Not authorized. Only doctors can perform this action." });
+    }
+};
+exports.doctorOnly = doctorOnly;
+const pharmacyOnly = (req, res, next) => {
+    if (req.user && req.user.role === "PHARMACY_OWNER") {
+        next();
+    }
+    else {
+        res.status(403).json({ message: "Not authorized. Only pharmacies can perform this action." });
+    }
+};
+exports.pharmacyOnly = pharmacyOnly;

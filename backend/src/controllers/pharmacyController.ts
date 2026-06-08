@@ -1,28 +1,14 @@
 import { Request, Response } from "express";
-import Pharmacy from "../models/Pharmacy";
+import { prisma } from "../config/db";
 
 export const getPharmacies = async (req: Request, res: Response) => {
   try {
-    const { lat, lng, maxDistance = 50000 } = req.query;
-    let pharmacies;
-
-    if (lat && lng) {
-      pharmacies = await Pharmacy.find({
-        location: {
-          $near: {
-            $geometry: {
-              type: "Point",
-              coordinates: [parseFloat(lng as string), parseFloat(lat as string)]
-            },
-            $maxDistance: parseInt(maxDistance as string) // in meters
-          }
-        }
-      });
-    } else {
-      pharmacies = await Pharmacy.find();
-    }
-    
-    res.json(pharmacies);
+    // PostgreSQL doesn't have $near geospatial by default, so return all pharmacies
+    const pharmacies = await prisma.pharmacy.findMany({
+      include: { user: { select: { name: true } } }
+    });
+    const mapped = pharmacies.map(p => ({ ...p, _id: p.id }));
+    res.json(mapped);
   } catch (error: any) {
     res.status(500).json({ message: "Server Error", error: error.message });
   }
@@ -30,19 +16,25 @@ export const getPharmacies = async (req: Request, res: Response) => {
 
 export const createPharmacy = async (req: any, res: Response) => {
   try {
-    const existing = await Pharmacy.findOne({ ownerId: req.user._id });
+    const existing = await prisma.pharmacy.findUnique({ where: { userId: req.user.id } });
     if (existing && req.user.role !== "ADMIN") {
-      return res.status(400).json({ message: "You already have a pharmacy registered" });
+      res.status(400).json({ message: "You already have a pharmacy registered" });
+      return;
     }
 
-    const pharmacyData = {
-      ...req.body,
-      ownerId: req.user.role === "ADMIN" ? (req.body.ownerId || req.user._id) : req.user._id
-    };
+    const ownerId = req.user.role === "ADMIN" ? (req.body.ownerId || req.user.id) : req.user.id;
 
-    const pharmacy = new Pharmacy(pharmacyData);
-    const createdPharmacy = await pharmacy.save();
-    res.status(201).json(createdPharmacy);
+    const pharmacy = await prisma.pharmacy.create({
+      data: {
+        name: req.body.name,
+        address: req.body.address,
+        phone: req.body.phone,
+        email: req.body.email,
+        userId: ownerId
+      }
+    });
+
+    res.status(201).json({ ...pharmacy, _id: pharmacy.id });
   } catch (error: any) {
     res.status(400).json({ message: "Invalid data", error: error.message });
   }
@@ -50,9 +42,17 @@ export const createPharmacy = async (req: any, res: Response) => {
 
 export const updatePharmacy = async (req: Request, res: Response) => {
   try {
-    const pharmacy = await Pharmacy.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    if (!pharmacy) return res.status(404).json({ message: "Pharmacy not found" });
-    res.json(pharmacy);
+    const id = req.params.id as string;
+    const pharmacy = await prisma.pharmacy.update({
+      where: { id },
+      data: {
+        name: req.body.name,
+        address: req.body.address,
+        phone: req.body.phone,
+        email: req.body.email
+      }
+    });
+    res.json({ ...pharmacy, _id: pharmacy.id });
   } catch (error: any) {
     res.status(400).json({ message: "Update failed", error: error.message });
   }
@@ -60,8 +60,8 @@ export const updatePharmacy = async (req: Request, res: Response) => {
 
 export const deletePharmacy = async (req: Request, res: Response) => {
   try {
-    const pharmacy = await Pharmacy.findByIdAndDelete(req.params.id);
-    if (!pharmacy) return res.status(404).json({ message: "Pharmacy not found" });
+    const id = req.params.id as string;
+    await prisma.pharmacy.delete({ where: { id } });
     res.json({ message: "Pharmacy deleted" });
   } catch (error: any) {
     res.status(500).json({ message: "Delete failed", error: error.message });
@@ -70,11 +70,12 @@ export const deletePharmacy = async (req: Request, res: Response) => {
 
 export const getMyPharmacy = async (req: any, res: Response) => {
   try {
-    const pharmacy = await Pharmacy.findOne({ ownerId: req.user._id });
+    const pharmacy = await prisma.pharmacy.findUnique({ where: { userId: req.user.id } });
     if (!pharmacy) {
-      return res.status(404).json({ message: "No pharmacy found for this owner" });
+      res.status(404).json({ message: "No pharmacy found for this owner" });
+      return;
     }
-    res.json(pharmacy);
+    res.json({ ...pharmacy, _id: pharmacy.id });
   } catch (error: any) {
     res.status(500).json({ message: "Server Error", error: error.message });
   }
@@ -82,15 +83,17 @@ export const getMyPharmacy = async (req: any, res: Response) => {
 
 export const updateMyPharmacy = async (req: any, res: Response) => {
   try {
-    const pharmacy = await Pharmacy.findOneAndUpdate(
-      { ownerId: req.user._id },
-      req.body,
-      { new: true }
-    );
-    if (!pharmacy) return res.status(404).json({ message: "Pharmacy not found" });
-    res.json(pharmacy);
+    const pharmacy = await prisma.pharmacy.update({
+      where: { userId: req.user.id },
+      data: {
+        name: req.body.name,
+        address: req.body.address,
+        phone: req.body.phone,
+        email: req.body.email
+      }
+    });
+    res.json({ ...pharmacy, _id: pharmacy.id });
   } catch (error: any) {
     res.status(400).json({ message: "Update failed", error: error.message });
   }
 };
-
