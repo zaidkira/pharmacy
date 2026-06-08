@@ -737,7 +737,9 @@ export function AccountPage() {
                          </div>
                          <div>
                            <p className="text-[10px] uppercase font-bold text-gray-400 tracking-widest mb-1">Shop Hours</p>
-                           <p className="text-sm font-semibold text-gray-700">{pharmacy.openingHours.open} — {pharmacy.openingHours.close}</p>
+                           <p className="text-sm font-semibold text-gray-700">
+                             {pharmacy.openingHours?.open || "08:00"} — {pharmacy.openingHours?.close || "22:00"}
+                           </p>
                            <span className="inline-block mt-2 px-2 py-0.5 bg-green-50 text-green-600 text-[10px] font-bold rounded-full uppercase tracking-widest border border-green-100">Open Now</span>
                          </div>
                       </div>
