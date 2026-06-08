@@ -141,7 +141,7 @@ export function DoctorDashboard() {
       await apiClient("/prescriptions", {
         method: "POST",
         body: JSON.stringify({
-          patientId: selectedAppointment.patientId._id,
+          patientId: selectedAppointment.patientId?._id,
           medications,
           diagnosis,
           notes,
@@ -313,10 +313,10 @@ export function DoctorDashboard() {
                         <td className="p-6">
                           <div className="flex items-center gap-4">
                             <div className="w-12 h-12 rounded-2xl bg-[#0F766E]/10 flex items-center justify-center text-[#0F766E] font-bold">
-                              {apt.patientId.name.charAt(0)}
+                              {(apt.patientId?.name || "Patient").charAt(0)}
                             </div>
                             <div>
-                              <p className="font-bold text-gray-800">{apt.patientId.name}</p>
+                              <p className="font-bold text-gray-800">{apt.patientId?.name || "Unknown Patient"}</p>
                               <p className="text-xs text-gray-500">{apt.reason || 'General Checkup'}</p>
                             </div>
                           </div>
@@ -363,10 +363,10 @@ export function DoctorDashboard() {
                                          <div className="w-12 h-12 rounded-xl bg-white flex items-center justify-center">
                                             <User className="w-6 h-6 text-[#0F766E]" />
                                          </div>
-                                         <div>
-                                            <p className="text-xs text-teal-600 font-semibold uppercase tracking-wider">Patient</p>
-                                            <p className="font-bold text-[#0F766E]">{selectedAppointment?.patientId.name}</p>
-                                         </div>
+                                          <div>
+                                             <p className="text-xs text-teal-600 font-semibold uppercase tracking-wider">Patient</p>
+                                             <p className="font-bold text-[#0F766E]">{selectedAppointment?.patientId?.name || "Unknown Patient"}</p>
+                                          </div>
                                       </div>
 
                                       <div className="space-y-2">
