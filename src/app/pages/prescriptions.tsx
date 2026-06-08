@@ -252,7 +252,7 @@ export function PatientPrescriptions() {
                            </div>
                            <div>
                               <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">Doctor</p>
-                              <p className="text-xl font-bold text-[#0F766E]">Dr. {presc.doctorId.name}</p>
+                              <p className="text-xl font-bold text-[#0F766E]">Dr. {presc.doctorId?.name || "Unknown Doctor"}</p>
                            </div>
                         </div>
                         <Badge className={`rounded-full px-4 py-1 ${
@@ -389,8 +389,8 @@ export function PatientPrescriptions() {
                                 </div>
                                 <div class="doctor-info">
                                   <h3>Doctor Details</h3>
-                                  <p><strong>Dr. ${presc.doctorId.name}</strong></p>
-                                  <p>Specialty: ${presc.doctorId.specialization || "General Medicine"}</p>
+                                  <p><strong>Dr. ${presc.doctorId?.name || "Unknown Doctor"}</strong></p>
+                                  <p>Specialty: ${presc.doctorId?.specialization || "General Medicine"}</p>
                                 </div>
                               </div>
                               <h3>Medications</h3>

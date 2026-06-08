@@ -226,7 +226,7 @@ export function PatientConsultations() {
                   <div key={apt._id} className="relative pl-6 border-l-4 border-[#0F766E]/20 hover:border-[#0F766E] transition-colors pb-6 last:pb-0">
                      <div className="absolute left-[-9px] top-0 w-4 h-4 rounded-full bg-[#0F766E] border-4 border-white shadow-sm" />
                      <p className="text-xs font-black text-[#0F766E] uppercase tracking-widest mb-1">{new Date(apt.date).toLocaleDateString()} • {apt.time}</p>
-                     <p className="font-bold text-gray-800">Dr. {apt.doctorId.name}</p>
+                     <p className="font-bold text-gray-800">Dr. {apt.doctorId?.name || "Unknown Doctor"}</p>
                      <p className="text-xs text-gray-500 mb-3">{apt.reason || 'General Checkup'}</p>
                      <Badge className={`rounded-full px-2 py-0.5 text-[10px] ${
                         apt.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-50 text-blue-600'

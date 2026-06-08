@@ -410,7 +410,7 @@ export function OrdersPage() {
                         </div>
                         <div>
                           <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">Doctor</p>
-                          <p className="text-lg font-bold text-[#0F766E]">Dr. {presc.doctorId.name}</p>
+                          <p className="text-lg font-bold text-[#0F766E]">Dr. {presc.doctorId?.name || "Unknown Doctor"}</p>
                         </div>
                       </div>
                       <Badge className="bg-blue-100 text-blue-700 border-blue-200 rounded-full">
