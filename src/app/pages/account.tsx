@@ -205,8 +205,8 @@ export function AccountPage() {
         licenseNumber: data.licenseNumber,
         open: data.openingHours?.open || "08:00",
         close: data.openingHours?.close || "22:00",
-        lat: data.location?.coordinates[1] || 36.7538,
-        lng: data.location?.coordinates[0] || 3.0588
+        lat: data.location?.coordinates?.[1] || 36.7538,
+        lng: data.location?.coordinates?.[0] || 3.0588
       });
     } catch (error: any) {
       // It's okay if they don't have one yet
@@ -726,7 +726,9 @@ export function AccountPage() {
                          <div>
                            <p className="text-[10px] uppercase font-bold text-gray-400 tracking-widest mb-1">Business Address</p>
                            <p className="text-sm font-semibold text-gray-700">{pharmacy.address}</p>
-                           <p className="text-xs text-gray-400 mt-1 font-mono">[{pharmacy.location.coordinates[1].toFixed(4)}, {pharmacy.location.coordinates[0].toFixed(4)}]</p>
+                           <p className="text-xs text-gray-400 mt-1 font-mono">
+                             [{pharmacy.location?.coordinates?.[1] !== undefined ? pharmacy.location.coordinates[1].toFixed(4) : "36.7538"}, {pharmacy.location?.coordinates?.[0] !== undefined ? pharmacy.location.coordinates[0].toFixed(4) : "3.0588"}]
+                           </p>
                          </div>
                       </div>
                       <div className="flex items-start gap-4">
@@ -765,21 +767,27 @@ export function AccountPage() {
                     </div>
                   </div>
                     <div className="mt-8 h-48 rounded-2xl overflow-hidden border-2 border-teal-50 shadow-inner group relative">
-                      <MapContainer 
-                        center={[pharmacy.location.coordinates[1], pharmacy.location.coordinates[0]]} 
-                        zoom={15} 
-                        style={{ height: "100%", width: "100%" }}
-                        zoomControl={false}
-                        scrollWheelZoom={false}
-                        dragging={false}
-                        touchZoom={false}
-                        doubleClickZoom={false}
-                      >
-                        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                        <Marker position={[pharmacy.location.coordinates[1], pharmacy.location.coordinates[0]]}>
-                           <Popup>{pharmacy.name}</Popup>
-                        </Marker>
-                      </MapContainer>
+                      {pharmacy.location?.coordinates && pharmacy.location.coordinates[0] !== undefined && pharmacy.location.coordinates[1] !== undefined ? (
+                        <MapContainer 
+                          center={[pharmacy.location.coordinates[1], pharmacy.location.coordinates[0]]} 
+                          zoom={15} 
+                          style={{ height: "100%", width: "100%" }}
+                          zoomControl={false}
+                          scrollWheelZoom={false}
+                          dragging={false}
+                          touchZoom={false}
+                          doubleClickZoom={false}
+                        >
+                          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                          <Marker position={[pharmacy.location.coordinates[1], pharmacy.location.coordinates[0]]}>
+                             <Popup>{pharmacy.name}</Popup>
+                          </Marker>
+                        </MapContainer>
+                      ) : (
+                        <div className="h-full w-full bg-gray-50 flex items-center justify-center text-gray-400 text-sm font-medium">
+                          Location coordinates not configured
+                        </div>
+                      )}
                       <div className="absolute inset-x-0 bottom-0 p-4 transform translate-y-full group-hover:translate-y-0 transition-transform bg-white/80 backdrop-blur-md">
                          <p className="text-[10px] text-teal-800 font-bold text-center">Location verified via GPS coordinates</p>
                       </div>
